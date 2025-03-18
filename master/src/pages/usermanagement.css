@@ -1,0 +1,17 @@
+/* Custom CSS for UserManagementSystem */
+.user-management-container {
+  padding: 20px;
+}
+
+.user-management-container .card {
+  margin: 0 auto;
+  max-width: 1200px;
+}
+
+.user-management-container .form-label {
+  font-weight: bold;
+}
+
+.user-management-container .btn-group {
+  margin-top: 20px;
+}

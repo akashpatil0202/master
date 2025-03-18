@@ -1,0 +1,103 @@
+/* Birthday and Festival Wishes Styles */
+.birthday-modal .modal-content,
+.festival-modal .modal-content {
+  border-radius: 15px;
+  border: none;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+}
+
+.birthday-modal .modal-header {
+  border-bottom: none;
+  background-color: #fff5f5;
+  border-radius: 15px 15px 0 0;
+}
+
+.festival-modal .modal-header {
+  border-bottom: none;
+  background-color: #f5f8ff;
+  border-radius: 15px 15px 0 0;
+}
+
+.birthday-modal .modal-title,
+.festival-modal .modal-title {
+  font-weight: 700;
+  color: #405189;
+}
+
+.birthday-modal .modal-body,
+.festival-modal .modal-body {
+  padding: 2rem;
+}
+
+.birthday-cake {
+  font-size: 5rem;
+  margin-bottom: 1rem;
+  animation: bounce 2s infinite;
+}
+
+.festival-icon {
+  font-size: 5rem;
+  margin-bottom: 1rem;
+  animation: pulse 2s infinite;
+}
+
+.birthday-message,
+.festival-message {
+  font-size: 1.1rem;
+  color: #555;
+  margin: 1.5rem 0;
+  line-height: 1.6;
+}
+
+.birthday-modal .modal-footer,
+.festival-modal .modal-footer {
+  border-top: none;
+  padding-bottom: 1.5rem;
+}
+
+.birthday-modal .btn-primary,
+.festival-modal .btn-primary {
+  background-color: #405189;
+  border-color: #405189;
+  font-weight: 600;
+  padding: 0.5rem 2rem;
+  border-radius: 50px;
+  transition: all 0.3s ease;
+}
+
+.birthday-modal .btn-primary:hover,
+.festival-modal .btn-primary:hover {
+  background-color: #333c70;
+  border-color: #333c70;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(64, 81, 137, 0.3);
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-20px);
+  }
+  60% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.festival-regards {
+  font-style: italic;
+  color: #666;
+}
