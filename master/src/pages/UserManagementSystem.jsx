@@ -2,19 +2,25 @@ import React, { useState, useEffect } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import * as XLSX from "xlsx";
 import axios from "axios";
-import { jsPDF } from "jspdf"; // Correct import for jsPDF
-import autoTable from "jspdf-autotable"; // Correct import for autoTable
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import "./usermanagement.css";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { registerUser } from "../../src/services/api";
+import { Modal, Button } from "react-bootstrap";
+
 const UserManagementSystem = () => {
   const [activeTab, setActiveTab] = useState("registration");
   const [employees, setEmployees] = useState([]);
-
   const [jobRoles, setJobRoles] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState(null);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [currentFilterKey, setCurrentFilterKey] = useState("");
+
   const [formData, setFormData] = useState({
     id: "",
     name: "",
@@ -26,6 +32,7 @@ const UserManagementSystem = () => {
     departmentId: "",
     jobRoleId: "",
   });
+
   const [filters, setFilters] = useState({
     name: "",
     email: "",
@@ -33,6 +40,7 @@ const UserManagementSystem = () => {
     jobrole: "",
     dob: "",
   });
+
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [groupBy, setGroupBy] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -43,7 +51,7 @@ const UserManagementSystem = () => {
         await fetchDepartments();
         await fetchJobRoles();
         if (activeTab === "userList") {
-          await fetchEmployees(); // Fetch employees if the active tab is "userList"
+          await fetchEmployees();
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -60,18 +68,15 @@ const UserManagementSystem = () => {
       const response = await axios.get(
         "http://localhost:8081/api/auth/departments"
       );
-      console.log("Departments API Response:", response);
-      const data = response.data || response || []; // Access data directly from the response
-      console.log("Departments Data Structure:", data); // Log the structure of data
-      // Transform data to include only id and name
+      const data = response.data || response || [];
       const transformedData = data.map((dept) => ({
         id: dept.id,
         name: dept.name,
       }));
-      console.log("Transformed Departments:", transformedData); // Log transformed data
       setDepartments(transformedData);
     } catch (error) {
       console.error("Error fetching departments:", error);
+      toast.error("Failed to load departments");
     }
   };
 
@@ -80,29 +85,26 @@ const UserManagementSystem = () => {
       const response = await axios.get(
         "http://localhost:8081/api/auth/job-roles"
       );
-      console.log("Job Roles API Response:", response);
-      const data = response.data || response || []; // Access data directly from the response
-      console.log("Job Roles Data Structure:", data); // Log the structure of data
-      // Transform data to include only id and name
+      const data = response.data || response || [];
       const transformedData = data.map((role) => ({
         id: role.id,
         name: role.name,
       }));
-      console.log("Transformed Job Roles:", transformedData); // Log transformed data
       setJobRoles(transformedData);
     } catch (error) {
       console.error("Error fetching job roles:", error);
+      toast.error("Failed to load job roles");
     }
   };
+
   const fetchEmployees = async () => {
     try {
       const response = await axios.get("http://localhost:8081/api/auth/users");
-      console.log("Employees API Response:", response); // Log the entire response
-      console.log("Employees Data:", response); // Log the response directly
-      setEmployees(response || []); // Set employees to the response array
+      setEmployees(response || []);
     } catch (error) {
       console.error("Error fetching employees:", error);
-      setEmployees([]); // Set employees to an empty array in case of an error
+      toast.error("Failed to load employees");
+      setEmployees([]);
     }
   };
 
@@ -121,20 +123,28 @@ const UserManagementSystem = () => {
         fullName: formData.name,
         email: formData.email,
         password: formData.password,
-        dob: new Date(formData.dob).toISOString().split("T")[0], // Convert to YYYY-MM-DD format
+        dob: new Date(formData.dob).toISOString().split("T")[0],
         phoneNo: formData.phone,
         address: formData.address,
-        departmentId: parseInt(formData.departmentId, 10), // Convert to number
-        jobRoleId: parseInt(formData.jobRoleId, 10), // Convert to number
+        departmentId: parseInt(formData.departmentId, 10),
+        jobRoleId: parseInt(formData.jobRoleId, 10),
       };
-
-      // Use the registerUser function from the API service
-      const response = await registerUser(payload);
-      console.log("Registration Response:", response);
-
-      alert("Employee registered successfully!");
-
-      // Reset form after successful registration
+  
+      let response;
+      if (formData.id) {
+        // Update existing employee
+        response = await axios.put(
+          `http://localhost:8081/api/auth/users/${formData.id}`,
+          payload
+        );
+        toast.success("Employee updated successfully!");
+      } else {
+        // Register new employee
+        response = await registerUser(payload);
+        toast.success("Employee registered successfully!");
+      }
+  
+      // Reset form after successful registration/update
       setFormData({
         id: "",
         name: "",
@@ -146,48 +156,51 @@ const UserManagementSystem = () => {
         departmentId: "",
         jobRoleId: "",
       });
-      toast.success("Registration successful! Redirecting to login...");
+  
+      // Refresh the employee list
+      fetchEmployees();
     } catch (error) {
       console.error("Error saving employee:", error);
-      toast.error(error || "Registration failed. Please try again.");
+      toast.error(
+        error?.response?.data?.message ||
+          "Registration failed. Please try again."
+      );
     }
   };
-
   const handleEditAndUpdate = async (id) => {
     if (id) {
       // Editing mode: Populate the form with the selected employee's data
       const employee = employees.find((emp) => emp.id === id);
       if (employee) {
         setFormData({
-          id: employee.id, // Ensure the ID is set
+          id: employee.id,
           name: employee.fullName,
           dob: employee.dob,
           phone: employee.phoneNo,
           email: employee.email,
-          password: "", // Do not pre-fill the password field
+          password: "", // Password is not pre-filled for security reasons
           address: employee.address,
-          departmentId: employee.department?.id || "",
-          jobRoleId: employee.jobRole?.id || "",
+          departmentId: employee.department?.id || "", // Ensure this is correct
+          jobRoleId: employee.jobRole?.id || "", // Ensure this is correct
         });
-        setActiveTab("registration"); // Switch to the registration form
+        setActiveTab("registration");
       } else {
         console.error("Employee not found");
         toast.error("Employee not found");
       }
     } else {
-      // Update or Register mode: Submit the data to the backend
+      // Update or Register mode
       try {
         const payload = {
           fullName: formData.name,
           email: formData.email,
-          dob: new Date(formData.dob).toISOString().split("T")[0], // Convert to YYYY-MM-DD format
+          dob: new Date(formData.dob).toISOString().split("T")[0],
           phoneNo: formData.phone,
           address: formData.address,
-          departmentId: parseInt(formData.departmentId, 10), // Convert to number
-          jobRoleId: parseInt(formData.jobRoleId, 10), // Convert to number
+          departmentId: parseInt(formData.departmentId, 10),
+          jobRoleId: parseInt(formData.jobRoleId, 10),
         };
   
-        // Only include password in the payload if it is provided
         if (formData.password) {
           payload.password = formData.password;
         }
@@ -195,7 +208,6 @@ const UserManagementSystem = () => {
         let response;
         if (formData.id) {
           // Update existing employee
-          console.log("Updating employee with ID:", formData.id); // Debugging
           response = await axios.put(
             `http://localhost:8081/api/auth/users/${formData.id}`,
             payload
@@ -203,12 +215,9 @@ const UserManagementSystem = () => {
           toast.success("Employee updated successfully!");
         } else {
           // Register new employee
-          console.log("Registering new employee"); // Debugging
           response = await registerUser(payload);
           toast.success("Employee registered successfully!");
         }
-  
-        console.log("Registration/Update Response:", response);
   
         // Reset form after successful registration/update
         setFormData({
@@ -217,7 +226,7 @@ const UserManagementSystem = () => {
           dob: "",
           phone: "",
           email: "",
-          password: "", // Clear the password field
+          password: "",
           address: "",
           departmentId: "",
           jobRoleId: "",
@@ -227,20 +236,27 @@ const UserManagementSystem = () => {
         fetchEmployees();
       } catch (error) {
         console.error("Error saving employee:", error);
-        toast.error(error.response?.data?.message || "Registration/Update failed. Please try again.");
+        toast.error(
+          error.response?.data?.message || "Operation failed. Please try again."
+        );
       }
     }
   };
-  // Handle delete employee
-  const handleDelete = async (id) => {
-    try {
-      await axios.delete(`http://localhost:8081/api/auth/users/${id}`);
-      fetchEmployees(); // Refresh the employee list
-      alert("Employee deleted successfully!");
-    } catch (error) {
-      console.error("Error deleting employee:", error);
-      alert("Failed to delete employee");
+
+  const handleDelete = async () => {
+    if (employeeToDelete) {
+      try {
+        await axios.delete(
+          `http://localhost:8081/api/auth/users/${employeeToDelete}`
+        );
+        fetchEmployees(); // Refresh the employee list
+        toast.success("Employee deleted successfully!");
+      } catch (error) {
+        console.error("Error deleting employee:", error);
+        toast.error("Failed to delete employee");
+      }
     }
+    setShowDeleteModal(false);
   };
 
   // Handle filter changes
@@ -248,6 +264,26 @@ const UserManagementSystem = () => {
     setFilters({
       ...filters,
       [key]: value,
+    });
+    setShowFilterModal(false);
+  };
+
+  // Clear a specific filter
+  const clearFilter = (key) => {
+    setFilters({
+      ...filters,
+      [key]: "",
+    });
+  };
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setFilters({
+      name: "",
+      email: "",
+      department: "",
+      jobrole: "",
+      dob: "",
     });
   };
 
@@ -260,83 +296,96 @@ const UserManagementSystem = () => {
     setSortConfig({ key, direction });
   };
 
-  // Handle group by
-  const handleGroupBy = (key) => {
-    setGroupBy(key);
-  };
-
-  const filteredEmployees = (employees || []).filter((employee) => {
-    const matchesName = (employee.fullName?.toLowerCase() || "").includes(
-      filters.name.toLowerCase()
-    );
-    const matchesEmail = (employee.email?.toLowerCase() || "").includes(
-      filters.email.toLowerCase()
-    );
-    const matchesDepartment = (
-      employee.departmentName?.toLowerCase() || ""
-    ).includes(filters.department.toLowerCase());
-    const matchesJobRole = (employee.jobRoleName?.toLowerCase() || "").includes(
-      filters.jobrole.toLowerCase()
-    );
-    const matchesDob = employee.dob?.includes(filters.dob) || "";
-    const matchesSearchQuery =
-      (employee.fullName?.toLowerCase() || "").includes(
-        searchQuery.toLowerCase()
-      ) ||
-      (employee.email?.toLowerCase() || "").includes(
-        searchQuery.toLowerCase()
-      ) ||
-      (employee.departmentName?.toLowerCase() || "").includes(
-        searchQuery.toLowerCase()
-      ) ||
-      (employee.jobRoleName?.toLowerCase() || "").includes(
-        searchQuery.toLowerCase()
+  // Filter employees
+  const filteredEmployees = React.useMemo(() => {
+    return (employees || []).filter((employee) => {
+      const matchesName = (employee.fullName?.toLowerCase() || "").includes(
+        filters.name.toLowerCase()
       );
+      const matchesEmail = (employee.email?.toLowerCase() || "").includes(
+        filters.email.toLowerCase()
+      );
+      const matchesDepartment = (
+        employee.departmentName?.toLowerCase() || ""
+      ).includes(filters.department.toLowerCase());
+      const matchesJobRole = (employee.jobRoleName?.toLowerCase() || "").includes(
+        filters.jobrole.toLowerCase()
+      );
+      const matchesDob = employee.dob?.includes(filters.dob) || "";
+      const matchesSearchQuery =
+        (employee.fullName?.toLowerCase() || "").includes(
+          searchQuery.toLowerCase()
+        ) ||
+        (employee.email?.toLowerCase() || "").includes(
+          searchQuery.toLowerCase()
+        ) ||
+        (employee.departmentName?.toLowerCase() || "").includes(
+          searchQuery.toLowerCase()
+        ) ||
+        (employee.jobRoleName?.toLowerCase() || "").includes(
+          searchQuery.toLowerCase()
+        );
 
-    return (
-      (filters.name ? matchesName : true) &&
-      (filters.email ? matchesEmail : true) &&
-      (filters.department ? matchesDepartment : true) &&
-      (filters.jobrole ? matchesJobRole : true) &&
-      (filters.dob ? matchesDob : true) &&
-      (searchQuery ? matchesSearchQuery : true)
-    );
-  });
+      return (
+        (filters.name ? matchesName : true) &&
+        (filters.email ? matchesEmail : true) &&
+        (filters.department ? matchesDepartment : true) &&
+        (filters.jobrole ? matchesJobRole : true) &&
+        (filters.dob ? matchesDob : true) &&
+        (searchQuery ? matchesSearchQuery : true)
+      );
+    });
+  }, [employees, filters, searchQuery]);
 
-  // .sort((a, b) => {
-  //   if (sortConfig.key) {
-  //     if (a[sortConfig.key] < b[sortConfig.key]) {
-  //       return sortConfig.direction === "asc" ? -1 : 1;
-  //     }
-  //     if (a[sortConfig.key] > b[sortConfig.key]) {
-  //       return sortConfig.direction === "asc" ? 1 : -1;
-  //     }
-  //   }
-  //   return 0;
-  // });
+  // Sort employees
+  const sortedEmployees = React.useMemo(() => {
+    if (!sortConfig.key) return filteredEmployees;
 
-  const groupedEmployees = groupBy
-    ? (filteredEmployees || []).reduce((acc, employee) => {
-        const key =
-          employee[
-            groupBy === "department"
-              ? "departmentName"
-              : groupBy === "jobRole"
-              ? "jobRoleName"
-              : "dob"
-          ] || "Unknown";
-        if (!acc[key]) {
-          acc[key] = [];
-        }
-        acc[key].push(employee);
-        return acc;
-      }, {})
-    : { "All Employees": filteredEmployees || [] };
+    return [...filteredEmployees].sort((a, b) => {
+      let aValue, bValue;
 
-  // console.log("Grouped Employees:", groupedEmployees);
+      if (sortConfig.key === "dob") {
+        // Extract year from date of birth for sorting
+        aValue = new Date(a.dob).getFullYear();
+        bValue = new Date(b.dob).getFullYear();
+      } else {
+        aValue = a[sortConfig.key];
+        bValue = b[sortConfig.key];
+      }
+
+      if (aValue < bValue) {
+        return sortConfig.direction === "asc" ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === "asc" ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [filteredEmployees, sortConfig]);
+
+  // Group employees
+  const groupedEmployees = React.useMemo(() => {
+    if (!groupBy) return { "All Employees": sortedEmployees || [] };
+
+    return sortedEmployees.reduce((acc, employee) => {
+      const key =
+        employee[
+          groupBy === "department"
+            ? "departmentName"
+            : groupBy === "jobRole"
+            ? "jobRoleName"
+            : "dob"
+        ] || "Unknown";
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(employee);
+      return acc;
+    }, {});
+  }, [sortedEmployees, groupBy]);
 
   const exportToExcel = () => {
-    const data = filteredEmployees.map((employee) => ({
+    const data = sortedEmployees.map((employee) => ({
       "Full Name": employee.fullName,
       Email: employee.email,
       "Phone No": employee.phoneNo,
@@ -354,7 +403,6 @@ const UserManagementSystem = () => {
   const exportToPDF = () => {
     const doc = new jsPDF();
 
-    // Use autoTable to create the table
     autoTable(doc, {
       head: [
         [
@@ -366,7 +414,7 @@ const UserManagementSystem = () => {
           "Date of Birth",
         ],
       ],
-      body: filteredEmployees.map((employee) => [
+      body: sortedEmployees.map((employee) => [
         employee.fullName,
         employee.email,
         employee.phoneNo,
@@ -376,22 +424,43 @@ const UserManagementSystem = () => {
       ]),
     });
 
-    // Save the PDF
     doc.save("Employees.pdf");
   };
 
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.bootstrap) {
+      const tooltipTriggerList = [].slice.call(
+        document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      );
+      tooltipTriggerList.map((tooltipTriggerEl) => {
+        return new window.bootstrap.Tooltip(tooltipTriggerEl);
+      });
+    }
+  }, [employees]);
+
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div
+        className="d-flex justify-content-center align-items-center"
+        style={{ height: "100vh" }}
+      >
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    );
   }
 
   return (
     <React.Fragment>
       <div className="container-fluid p-4 bg-light min-vh-100">
         <div className="row justify-content-center">
-          <div className="col-lg-10">
-            <div className="card shadow-lg">
-              <div className="card-header bg-primary text-white">
-                {/* <h1 className="card-title text-center">Employee Management System</h1> */}
+          <div className="col-xl-10">
+            <div className="card shadow-lg border-0 rounded-3">
+              <div className="card-header bg-primary text-white py-3">
+                <h2 className="card-title text-center text-white mb-0">
+                  User Management System
+                </h2>
               </div>
               <div className="card-body">
                 {/* Tab Navigation */}
@@ -403,7 +472,8 @@ const UserManagementSystem = () => {
                       }`}
                       onClick={() => setActiveTab("registration")}
                     >
-                      👤 Employee Registration
+                      <i className="bi bi-person-plus"></i> Employee
+                      Registration
                     </button>
                   </li>
                   <li className="nav-item">
@@ -411,9 +481,12 @@ const UserManagementSystem = () => {
                       className={`nav-link ${
                         activeTab === "userList" ? "active" : ""
                       }`}
-                      onClick={() => setActiveTab("userList")}
+                      onClick={() => {
+                        setActiveTab("userList");
+                        fetchEmployees();
+                      }}
                     >
-                      📋 Employee List
+                      <i className="bi bi-list-ul"></i> Employee List
                     </button>
                   </li>
                 </ul>
@@ -424,7 +497,9 @@ const UserManagementSystem = () => {
                     <form onSubmit={handleSubmit}>
                       <div className="row g-3">
                         <div className="col-md-6">
-                          <label className="form-label">Full Name</label>
+                          <label className="form-label fw-bold">
+                            Full Name
+                          </label>
                           <input
                             type="text"
                             name="name"
@@ -436,7 +511,9 @@ const UserManagementSystem = () => {
                           />
                         </div>
                         <div className="col-md-6">
-                          <label className="form-label">Date of Birth</label>
+                          <label className="form-label fw-bold">
+                            Date of Birth
+                          </label>
                           <input
                             type="date"
                             name="dob"
@@ -447,7 +524,9 @@ const UserManagementSystem = () => {
                           />
                         </div>
                         <div className="col-md-6">
-                          <label className="form-label">Phone Number</label>
+                          <label className="form-label fw-bold">
+                            Phone Number
+                          </label>
                           <input
                             type="tel"
                             name="phone"
@@ -459,7 +538,9 @@ const UserManagementSystem = () => {
                           />
                         </div>
                         <div className="col-md-6">
-                          <label className="form-label">Email Address</label>
+                          <label className="form-label fw-bold">
+                            Email Address
+                          </label>
                           <input
                             type="email"
                             name="email"
@@ -471,17 +552,17 @@ const UserManagementSystem = () => {
                           />
                         </div>
                         <div className="col-md-6">
-                          <label className="form-label">Password</label>
+                          <label className="form-label fw-bold">Password</label>
                           <input
-                            type="password"
-                            name="password"
-                            value={formData.password}
-                            onChange={handleInputChange}
-                            className="form-control"
-                            placeholder="Enter password"
-                            disabled={!!formData.id} // Disable if formData.id exists (edit mode)
-                            required={!formData.id} // Make it required only for new registrations
-                          />
+  type="password"
+  name="password"
+  value={formData.password}
+  onChange={handleInputChange}
+  className="form-control"
+  placeholder="Enter password"
+  disabled={!!formData.id} // Disable if editing
+  required={!formData.id} // Required only for new registration
+/>
                           {formData.id && (
                             <small className="text-muted">
                               Password cannot be changed here.
@@ -489,7 +570,7 @@ const UserManagementSystem = () => {
                           )}
                         </div>
                         <div className="col-md-6">
-                          <label className="form-label">Address</label>
+                          <label className="form-label fw-bold">Address</label>
                           <textarea
                             name="address"
                             value={formData.address}
@@ -501,40 +582,42 @@ const UserManagementSystem = () => {
                           ></textarea>
                         </div>
                         <div className="col-md-6">
-                          <label className="form-label">Department</label>
+                          <label className="form-label fw-bold">
+                            Department
+                          </label>
                           <select
-                            name="departmentId"
-                            value={formData.departmentId}
-                            onChange={handleInputChange}
-                            className="form-select"
-                            required
-                          >
-                            <option value="">Select Department</option>
-                            {departments.map((dept) => (
-                              <option key={dept.id} value={dept.id}>
-                                {dept.name}
-                              </option>
-                            ))}
-                          </select>
+  name="departmentId"
+  value={formData.departmentId}
+  onChange={handleInputChange}
+  className="form-select"
+  required
+>
+  <option value="">Select Department</option>
+  {departments.map((dept) => (
+    <option key={dept.id} value={dept.id}>
+      {dept.name}
+    </option>
+  ))}
+</select>
                         </div>
                         <div className="col-md-6">
-                          <label className="form-label">Job Role</label>
+                          <label className="form-label fw-bold">Job Role</label>
                           <select
-                            name="jobRoleId"
-                            value={formData.jobRoleId}
-                            onChange={handleInputChange}
-                            className="form-select"
-                            required
-                          >
-                            <option value="">Select Job Role</option>
-                            {jobRoles.map((role) => (
-                              <option key={role.id} value={role.id}>
-                                {role.name}
-                              </option>
-                            ))}
-                          </select>
+  name="jobRoleId"
+  value={formData.jobRoleId}
+  onChange={handleInputChange}
+  className="form-select"
+  required
+>
+  <option value="">Select Job Role</option>
+  {jobRoles.map((role) => (
+    <option key={role.id} value={role.id}>
+      {role.name}
+    </option>
+  ))}
+</select>
                         </div>
-                        <div className="col-12 d-flex justify-content-start gap-2">
+                        <div className="col-12 d-flex justify-content-start gap-2 mt-4">
                           <button
                             type="button"
                             onClick={() =>
@@ -552,9 +635,11 @@ const UserManagementSystem = () => {
                             }
                             className="btn btn-secondary"
                           >
+                            <i className="bi bi-arrow-counterclockwise me-1"></i>{" "}
                             Reset
                           </button>
                           <button type="submit" className="btn btn-primary">
+                            <i className="bi bi-save me-1"></i>
                             {formData.id
                               ? "Update Employee"
                               : "Register Employee"}
@@ -568,9 +653,10 @@ const UserManagementSystem = () => {
                 {/* Employee List */}
                 {activeTab === "userList" && (
                   <div className="tab-pane fade show active">
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                      <div className="d-flex gap-2">
-                        <div className="input-group" style={{ width: "300px" }}>
+                    <div className="row mb-3">
+                      {/* Search Bar - Left Side */}
+                      <div className="col-md-6 col-12 mb-3 mb-md-0">
+                        <div className="input-group  w-75">
                           <input
                             type="text"
                             className="form-control"
@@ -579,256 +665,532 @@ const UserManagementSystem = () => {
                             onChange={(e) => setSearchQuery(e.target.value)}
                           />
                           <button
-                            className="btn btn-outline-secondary"
+                            className="btn btn-outline-primary"
                             type="button"
                           >
-                            🔍
+                            <i className="bi bi-search"></i>
                           </button>
                         </div>
-                        <select
-                          className="form-select"
-                          style={{ width: "200px" }}
-                          value={groupBy}
-                          onChange={(e) => handleGroupBy(e.target.value)}
-                        >
-                          <option value="">No Grouping</option>
-                          <option value="department">Department</option>
-                          <option value="jobRole">Job Role</option>
-                          <option value="dob">Date of Birth</option>
-                        </select>
                       </div>
-                      <div className="dropdown">
-                        <button
-                          className="btn btn-success dropdown-toggle"
-                          type="button"
-                          id="exportDropdown"
-                          data-bs-toggle="dropdown"
-                          aria-expanded="false"
-                        >
-                          📥 Export
-                        </button>
-                        <ul
-                          className="dropdown-menu"
-                          aria-labelledby="exportDropdown"
-                        >
-                          <li>
+
+                      {/* Grouping Dropdown and Export Button - Right Side */}
+                      <div className="col-md-6 col-12 d-flex align-items-start gap-2">
+                        {/* Grouping Dropdown - Smaller Size */}
+                        <div className="flex-grow-1 mb-3 mb-md-0">
+                          {" "}
+                          {/* Added mb-3 for margin-bottom on small screens */}
+                          <select
+                            className="form-select w-75"
+                            value={groupBy}
+                            onChange={(e) => handleGroupBy(e.target.value)}
+                          >
+                            <option value="">No Grouping</option>
+                            <option value="department">
+                              Group by Department
+                            </option>
+                            <option value="jobRole">Group by Job Role</option>
+                            <option value="dob">Group by Date of Birth</option>
+                          </select>
+                        </div>
+
+                        {/* Export Dropdown - Right Side with Top Margin */}
+                        <div className="mt-2 mt-md-0">
+                          <div className="dropdown">
                             <button
-                              className="dropdown-item"
-                              onClick={exportToExcel}
+                              className="btn btn-success dropdown-toggle"
+                              type="button"
+                              id="exportDropdown"
+                              data-bs-toggle="dropdown"
+                              aria-expanded="false"
                             >
-                              Export to Excel
+                              <i className="bi bi-download me-1"></i> Export
                             </button>
-                          </li>
-                          <li>
-                            <button
-                              className="dropdown-item"
-                              onClick={exportToPDF}
+                            <ul
+                              className="dropdown-menu dropdown-menu-end"
+                              aria-labelledby="exportDropdown"
                             >
-                              Export to PDF
-                            </button>
-                          </li>
-                        </ul>
+                              <li>
+                                <button
+                                  className="dropdown-item"
+                                  onClick={exportToExcel}
+                                >
+                                  <i className="bi bi-file-earmark-excel me-2"></i>
+                                  Export to Excel
+                                </button>
+                              </li>
+                              <li>
+                                <button
+                                  className="dropdown-item"
+                                  onClick={exportToPDF}
+                                >
+                                  <i className="bi bi-file-earmark-pdf me-2"></i>
+                                  Export to PDF
+                                </button>
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="table-responsive">
-                      <table className="table table-hover">
-                        <thead>
-                          <tr>
-                            <th>
-                              <div className="d-flex align-items-center gap-2">
-                                <span>Name</span>
-                                <button
-                                  className="btn btn-link p-0"
-                                  onClick={() => requestSort("name")}
-                                >
-                                  {sortConfig.key === "name"
-                                    ? sortConfig.direction === "asc"
-                                      ? "↑"
-                                      : "↓"
-                                    : "↕️"}
-                                </button>
-                                <button
-                                  className="btn btn-link p-0"
-                                  onClick={() =>
-                                    handleFilterChange(
-                                      "name",
-                                      prompt("Enter filter value for Name:")
-                                    )
-                                  }
-                                >
-                                  ⏳
-                                </button>
-                              </div>
-                            </th>
-                            <th>
-                              <div className="d-flex align-items-center gap-2">
-                                <span>Email</span>
-                                <button
-                                  className="btn btn-link p-0"
-                                  onClick={() =>
-                                    handleFilterChange(
-                                      "email",
-                                      prompt("Enter filter value for Email:")
-                                    )
-                                  }
-                                >
-                                  ⏳
-                                </button>
-                              </div>
-                            </th>
-                            <th>
-                              <div className="d-flex align-items-center gap-2">
-                                <span>Phone No</span>
-                                <button
-                                  className="btn btn-link p-0"
-                                  onClick={() =>
-                                    handleFilterChange(
-                                      "phoneNo",
-                                      prompt("Enter filter value for Phone No:")
-                                    )
-                                  }
-                                >
-                                  ⏳
-                                </button>
-                              </div>
-                            </th>
-                            <th>
-                              <div className="d-flex align-items-center gap-2">
-                                <span>Department</span>
-                                <button
-                                  className="btn btn-link p-0"
-                                  onClick={() => requestSort("department")}
-                                >
-                                  {sortConfig.key === "department"
-                                    ? sortConfig.direction === "asc"
-                                      ? "↑"
-                                      : "↓"
-                                    : "↕️"}
-                                </button>
-                                <button
-                                  className="btn btn-link p-0"
-                                  onClick={() =>
-                                    handleFilterChange(
-                                      "department",
-                                      prompt(
-                                        "Enter filter value for Department:"
-                                      )
-                                    )
-                                  }
-                                >
-                                  ⏳
-                                </button>
-                              </div>
-                            </th>
-                            <th>
-                              <div className="d-flex align-items-center gap-2">
-                                <span>Job Role</span>
-                                <button
-                                  className="btn btn-link p-0"
-                                  onClick={() => requestSort("jobRole")}
-                                >
-                                  {sortConfig.key === "jobRole"
-                                    ? sortConfig.direction === "asc"
-                                      ? "↑"
-                                      : "↓"
-                                    : "↕️"}
-                                </button>
-                                <button
-                                  className="btn btn-link p-0"
-                                  onClick={() =>
-                                    handleFilterChange(
-                                      "jobRole",
-                                      prompt("Enter filter value for Job Role:")
-                                    )
-                                  }
-                                >
-                                  ⏳
-                                </button>
-                              </div>
-                            </th>
-                            <th>
-                              <div className="d-flex align-items-center gap-2">
-                                <span>Date of Birth</span>
-                                <button
-                                  className="btn btn-link p-0"
-                                  onClick={() => requestSort("dob")}
-                                >
-                                  {sortConfig.key === "dob"
-                                    ? sortConfig.direction === "asc"
-                                      ? "↑"
-                                      : "↓"
-                                    : "↕️"}
-                                </button>
-                                <button
-                                  className="btn btn-link p-0"
-                                  onClick={() =>
-                                    handleFilterChange(
-                                      "dob",
-                                      prompt(
-                                        "Enter filter value Date of Birth:"
-                                      )
-                                    )
-                                  }
-                                >
-                                  ⏳
-                                </button>
-                              </div>
-                            </th>
-                            <th>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {Object.entries(groupedEmployees).length > 0 ? (
-                            Object.entries(groupedEmployees).map(
-                              ([group, employees]) => (
-                                <React.Fragment key={group}>
-                                  <tr className="bg-light">
-                                    <td colSpan="7" className="fw-bold">
-                                      {group} ({employees.length})
-                                    </td>
-                                  </tr>
-                                  {employees?.map((employee) => (
-                                    <tr key={employee.id}>
-                                      <td>{employee.fullName}</td>
-                                      <td>{employee.email}</td>
-                                      <td>{employee.phoneNo}</td>
-                                      <td>
-                                        {employee.departmentName ?? "N/A"}
-                                      </td>
-                                      <td>{employee.jobRoleName ?? "N/A"}</td>
-                                      <td>{employee.dob}</td>
-                                      <td>
+
+                    <div className="card shadow-sm">
+                      <div className="card-body p-0">
+                        <div className="table-responsive">
+                          <table
+                            className="table table-hover table-striped mb-0"
+                            style={{ minWidth: "800px" }}
+                          >
+                            {" "}
+                            <thead className="table-light">
+                              <tr>
+                                <th style={{ width: "5%", minWidth: "50px" }}>
+                                  <div className="d-flex align-items-center">
+                                    <span>Sr. No</span>
+                                    <div className="ms-auto">
+                                      <button
+                                        className="btn btn-sm btn-link p-0 me-1"
+                                        onClick={() => requestSort("id")}
+                                        title="Sort by ID"
+                                      >
+                                        <i
+                                          className={`bi bi-arrow-down-up ${
+                                            sortConfig.key === "id" &&
+                                            sortConfig.direction === "asc"
+                                              ? "text-primary"
+                                              : ""
+                                          }`}
+                                        ></i>
+                                      </button>
+                                      <button
+                                        className="btn btn-sm btn-link p-0"
+                                        onClick={() => {
+                                          setCurrentFilterKey("id");
+                                          setShowFilterModal(true);
+                                        }}
+                                        title="Filter by ID"
+                                      >
+                                        <i className="bi bi-funnel"></i>
+                                      </button>
+                                      {filters.id && (
                                         <button
-                                          className="btn btn-warning btn-sm me-2"
-                                          onClick={() =>
-                                            handleEditAndUpdate(employee.id)
-                                          }
+                                          className="btn btn-sm btn-link p-0 ms-1"
+                                          onClick={() => clearFilter("id")}
+                                          title="Clear filter"
                                         >
-                                          Edit
+                                          <i className="bi bi-x-circle"></i>
                                         </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </th>
+                                <th style={{ width: "20%", minWidth: "150px" }}>
+                                  <div className="d-flex align-items-center">
+                                    <span>Name</span>
+                                    <div className="ms-auto">
+                                      <button
+                                        className="btn btn-sm btn-link p-0 me-1"
+                                        onClick={() => requestSort("name")}
+                                        title="Sort by name"
+                                      >
+                                        <i
+                                          className={`bi bi-arrow-down-up ${
+                                            sortConfig.key === "name" &&
+                                            sortConfig.direction === "asc"
+                                              ? "text-primary"
+                                              : ""
+                                          }`}
+                                        ></i>
+                                      </button>
+                                      <button
+                                        className="btn btn-sm btn-link p-0"
+                                        onClick={() => {
+                                          setCurrentFilterKey("name");
+                                          setShowFilterModal(true);
+                                        }}
+                                        title="Filter by name"
+                                      >
+                                        <i className="bi bi-funnel"></i>
+                                      </button>
+                                      {filters.name && (
                                         <button
-                                          className="btn btn-danger btn-sm"
-                                          onClick={() =>
-                                            handleDelete(employee.id)
-                                          }
+                                          className="btn btn-sm btn-link p-0 ms-1"
+                                          onClick={() => clearFilter("name")}
+                                          title="Clear filter"
                                         >
-                                          Delete
+                                          <i className="bi bi-x-circle"></i>
                                         </button>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </React.Fragment>
-                              )
-                            )
-                          ) : (
-                            <tr>
-                              <td colSpan="7" className="text-center">
-                                No employees found.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
+                                      )}
+                                    </div>
+                                  </div>
+                                </th>
+                                <th style={{ width: "20%", minWidth: "150px" }}>
+                                  <div className="d-flex align-items-center">
+                                    <span>Email</span>
+                                    <div className="ms-auto">
+                                      <button
+                                        className="btn btn-sm btn-link p-0 me-1"
+                                        onClick={() => requestSort("email")}
+                                        title="Sort by email"
+                                      >
+                                        <i
+                                          className={`bi bi-arrow-down-up ${
+                                            sortConfig.key === "email" &&
+                                            sortConfig.direction === "asc"
+                                              ? "text-primary"
+                                              : ""
+                                          }`}
+                                        ></i>
+                                      </button>
+                                      <button
+                                        className="btn btn-sm btn-link p-0"
+                                        onClick={() => {
+                                          setCurrentFilterKey("email");
+                                          setShowFilterModal(true);
+                                        }}
+                                        title="Filter by email"
+                                      >
+                                        <i className="bi bi-funnel"></i>
+                                      </button>
+                                      {filters.email && (
+                                        <button
+                                          className="btn btn-sm btn-link p-0 ms-1"
+                                          onClick={() => clearFilter("email")}
+                                          title="Clear filter"
+                                        >
+                                          <i className="bi bi-x-circle"></i>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </th>
+                                <th style={{ width: "12%", minWidth: "120px" }}>
+                                  <div className="d-flex align-items-center">
+                                    <span>Phone</span>
+                                    <div className="ms-auto">
+                                      <button
+                                        className="btn btn-sm btn-link p-0 me-1"
+                                        onClick={() => requestSort("phone")}
+                                        title="Sort by phone"
+                                      >
+                                        <i
+                                          className={`bi bi-arrow-down-up ${
+                                            sortConfig.key === "phone" &&
+                                            sortConfig.direction === "asc"
+                                              ? "text-primary"
+                                              : ""
+                                          }`}
+                                        ></i>
+                                      </button>
+                                      <button
+                                        className="btn btn-sm btn-link p-0"
+                                        onClick={() => {
+                                          setCurrentFilterKey("phone");
+                                          setShowFilterModal(true);
+                                        }}
+                                        title="Filter by phone"
+                                      >
+                                        <i className="bi bi-funnel"></i>
+                                      </button>
+                                      {filters.phone && (
+                                        <button
+                                          className="btn btn-sm btn-link p-0 ms-1"
+                                          onClick={() => clearFilter("phone")}
+                                          title="Clear filter"
+                                        >
+                                          <i className="bi bi-x-circle"></i>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </th>
+                                <th style={{ width: "12%", minWidth: "120px" }}>
+                                  <div className="d-flex align-items-center">
+                                    <span>Department</span>
+                                    <div className="ms-auto">
+                                      <button
+                                        className="btn btn-sm btn-link p-0 me-1"
+                                        onClick={() => requestSort("department")}
+                                        title="Sort by department"
+                                      >
+                                        <i
+                                          className={`bi bi-arrow-down-up ${
+                                            sortConfig.key === "department" &&
+                                            sortConfig.direction === "asc"
+                                              ? "text-primary"
+                                              : ""
+                                          }`}
+                                        ></i>
+                                      </button>
+                                      <button
+                                        className="btn btn-sm btn-link p-0"
+                                        onClick={() => {
+                                          setCurrentFilterKey("department");
+                                          setShowFilterModal(true);
+                                        }}
+                                        title="Filter by department"
+                                      >
+                                        <i className="bi bi-funnel"></i>
+                                      </button>
+                                      {filters.department && (
+                                        <button
+                                          className="btn btn-sm btn-link p-0 ms-1"
+                                          onClick={() => clearFilter("department")}
+                                          title="Clear filter"
+                                        >
+                                          <i className="bi bi-x-circle"></i>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </th>
+                                <th style={{ width: "12%", minWidth: "120px" }}>
+                                  <div className="d-flex align-items-center">
+                                    <span>Job Role</span>
+                                    <div className="ms-auto">
+                                      <button
+                                        className="btn btn-sm btn-link p-0 me-1"
+                                        onClick={() => requestSort("jobRole")}
+                                        title="Sort by job role"
+                                      >
+                                        <i
+                                          className={`bi bi-arrow-down-up ${
+                                            sortConfig.key === "jobRole" &&
+                                            sortConfig.direction === "asc"
+                                              ? "text-primary"
+                                              : ""
+                                          }`}
+                                        ></i>
+                                      </button>
+                                      <button
+                                        className="btn btn-sm btn-link p-0"
+                                        onClick={() => {
+                                          setCurrentFilterKey("jobrole");
+                                          setShowFilterModal(true);
+                                        }}
+                                        title="Filter by job role"
+                                      >
+                                        <i className="bi bi-funnel"></i>
+                                      </button>
+                                      {filters.jobrole && (
+                                        <button
+                                          className="btn btn-sm btn-link p-0 ms-1"
+                                          onClick={() => clearFilter("jobrole")}
+                                          title="Clear filter"
+                                        >
+                                          <i className="bi bi-x-circle"></i>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </th>
+                                <th style={{ width: "12%", minWidth: "120px" }}>
+                                  <div className="d-flex align-items-center">
+                                    <span>DOB</span>
+                                    <div className="ms-auto">
+                                      <button
+                                        className="btn btn-sm btn-link p-0 me-1"
+                                        onClick={() => requestSort("dob")}
+                                        title="Sort by date of birth"
+                                      >
+                                        <i
+                                          className={`bi bi-arrow-down-up ${
+                                            sortConfig.key === "dob" &&
+                                            sortConfig.direction === "asc"
+                                              ? "text-primary"
+                                              : ""
+                                          }`}
+                                        ></i>
+                                      </button>
+                                      <button
+                                        className="btn btn-sm btn-link p-0"
+                                        onClick={() => {
+                                          setCurrentFilterKey("dob");
+                                          setShowFilterModal(true);
+                                        }}
+                                        title="Filter by date of birth"
+                                      >
+                                        <i className="bi bi-funnel"></i>
+                                      </button>
+                                      {filters.dob && (
+                                        <button
+                                          className="btn btn-sm btn-link p-0 ms-1"
+                                          onClick={() => clearFilter("dob")}
+                                          title="Clear filter"
+                                        >
+                                          <i className="bi bi-x-circle"></i>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </th>
+                                <th
+                                  style={{ width: "12%", minWidth: "140px" }}
+                                  className="text-center"
+                                >
+                                  Actions
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {Object.entries(groupedEmployees).length > 0 ? (
+                                Object.entries(groupedEmployees).map(
+                                  ([group, employees], groupIndex) => (
+                                    <React.Fragment key={group}>
+                                      <tr className="bg-light">
+                                        <td
+                                          colSpan="8"
+                                          className="fw-bold text-primary"
+                                        >
+                                          <i className="bi bi-folder me-2"></i>
+                                          {group} ({employees.length})
+                                        </td>
+                                      </tr>
+                                      {employees?.map((employee, index) => (
+                                        <tr key={employee.id}>
+                                          <td>{groupIndex * 100 + index + 1}</td>
+                                          <td
+                                            className="text-truncate"
+                                            style={{ maxWidth: "200px" }}
+                                            data-bs-toggle="tooltip"
+                                            data-bs-placement="top"
+                                            title={employee.fullName}
+                                          >
+                                            {employee.fullName}
+                                          </td>
+                                          <td
+                                            className="text-truncate"
+                                            style={{ maxWidth: "200px" }}
+                                            data-bs-toggle="tooltip"
+                                            data-bs-placement="top"
+                                            title={employee.email}
+                                          >
+                                            {employee.email}
+                                          </td>
+                                          <td
+                                            className="text-truncate"
+                                            style={{ maxWidth: "120px" }}
+                                            data-bs-toggle="tooltip"
+                                            data-bs-placement="top"
+                                            title={employee.phoneNo}
+                                          >
+                                            {employee.phoneNo}
+                                          </td>
+                                          <td
+                                            className="text-truncate"
+                                            style={{ maxWidth: "120px" }}
+                                            data-bs-toggle="tooltip"
+                                            data-bs-placement="top"
+                                            title={
+                                              employee.departmentName ?? "N/A"
+                                            }
+                                          >
+                                            {employee.departmentName ?? "N/A"}
+                                          </td>
+                                          <td
+                                            className="text-truncate"
+                                            style={{ maxWidth: "140px" }}
+                                            data-bs-toggle="tooltip"
+                                            data-bs-placement="top"
+                                            title={
+                                              employee.jobRoleName ?? "N/A"
+                                            }
+                                          >
+                                            {employee.jobRoleName ?? "N/A"}
+                                          </td>
+                                          <td
+                                            className="text-truncate"
+                                            style={{ maxWidth: "140px" }}
+                                            data-bs-toggle="tooltip"
+                                            data-bs-placement="top"
+                                            title={employee.dob}
+                                          >
+                                            {employee.dob}
+                                          </td>
+                                          <td>
+                                            <div>
+                                              {/* Delete Confirmation Modal */}
+                                              <Modal
+                                                show={showDeleteModal}
+                                                onHide={() =>
+                                                  setShowDeleteModal(false)
+                                                }
+                                              >
+                                                <Modal.Header closeButton>
+                                                  <Modal.Title>
+                                                    Confirm Delete
+                                                  </Modal.Title>
+                                                </Modal.Header>
+                                                <Modal.Body>
+                                                  Are you sure you want to
+                                                  delete this employee?
+                                                </Modal.Body>
+                                                <Modal.Footer>
+                                                  <Button
+                                                    variant="secondary"
+                                                    onClick={() =>
+                                                      setShowDeleteModal(false)
+                                                    }
+                                                  >
+                                                    Cancel
+                                                  </Button>
+                                                  <Button
+                                                    variant="danger"
+                                                    onClick={handleDelete}
+                                                  >
+                                                    Delete
+                                                  </Button>
+                                                </Modal.Footer>
+                                              </Modal>
+
+                                              {/* Table and Buttons */}
+                                              <div className="d-flex justify-content-center">
+                                                {/* Edit Button */}
+                                                <button
+                                                  className="btn btn-xs btn-secondary me-2"
+                                                  onClick={() =>
+                                                    handleEditAndUpdate(
+                                                      employee.id
+                                                    )
+                                                  }
+                                                  title="Edit Employee"
+                                                >
+                                                  <i className="bi bi-pencil"></i>{" "}
+                                                  Edit
+                                                </button>
+
+                                                {/* Delete Button */}
+                                                <button
+                                                  className="btn btn-xs btn-delete"
+                                                  onClick={() =>
+                                                    handleDeleteConfirmation(
+                                                      employee.id
+                                                    )
+                                                  }
+                                                  title="Delete Employee"
+                                                >
+                                                  <i className="bi bi-trash"></i>{" "}
+                                                  Delete
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </React.Fragment>
+                                  )
+                                )
+                              ) : (
+                                <tr>
+                                  <td colSpan="8" className="text-center py-4">
+                                    <i className="bi bi-exclamation-circle text-secondary me-1"></i>
+                                    No employees found.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -837,8 +1199,66 @@ const UserManagementSystem = () => {
           </div>
         </div>
       </div>
-      <ToastContainer />
+
+      {/* Filter Modal */}
+      <Modal
+        show={showFilterModal}
+        onHide={() => setShowFilterModal(false)}
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Filter by {currentFilterKey}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <input
+            type="text"
+            className="form-control"
+            placeholder={`Enter ${currentFilterKey}`}
+            value={filters[currentFilterKey]}
+            onChange={(e) =>
+              handleFilterChange(currentFilterKey, e.target.value)
+            }
+          />
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            variant="secondary"
+            onClick={() => setShowFilterModal(false)}
+          >
+            Close
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => setShowFilterModal(false)}
+          >
+            Apply Filter
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Clear All Filters Button */}
+      <div className="d-flex justify-content-end mt-3">
+        <Button
+          variant="outline-danger"
+          onClick={clearAllFilters}
+          disabled={
+            !filters.name &&
+            !filters.email &&
+            !filters.department &&
+            !filters.jobrole &&
+            !filters.dob
+          }
+        >
+          <i className="bi bi-x-circle me-2"></i>Clear All Filters
+        </Button>
+      </div>
+
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+      />
     </React.Fragment>
   );
 };
+
 export default UserManagementSystem;

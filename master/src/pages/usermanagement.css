@@ -1,17 +1,96 @@
-/* Custom CSS for UserManagementSystem */
-.user-management-container {
-  padding: 20px;
+/* Custom styles for User Management System */
+
+/* General styling */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f5f7fa;
 }
 
-.user-management-container .card {
-  margin: 0 auto;
-  max-width: 1200px;
+/* Card styling */
+.card {
+  transition: all 0.3s ease;
+  border-radius: 0.5rem;
 }
 
-.user-management-container .form-label {
-  font-weight: bold;
+.card-header {
+  border-top-left-radius: 0.5rem !important;
+  border-top-right-radius: 0.5rem !important;
 }
 
-.user-management-container .btn-group {
-  margin-top: 20px;
+/* Form styling */
+.form-control, .form-select {
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ced4da;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
+
+.form-control:focus, .form-select:focus {
+  border-color: #86b7fe;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* Button styling */
+.btn {
+  border-radius: 0.375rem;
+  padding: 0.5rem 1rem; /* Larger buttons */
+  transition: all 0.2s ease-in-out;
+}
+
+/* Custom styles for buttons */
+.btn-xs {
+  padding: 0.25rem 0.5rem; /* Smaller padding */
+  font-size: 0.75rem; /* Smaller font size */
+}
+
+/* Delete button styles */
+.btn-delete {
+  background-color: #0d6efd; /* Blue */
+  border-color: #0d6efd;
+  color: #fff; /* White text */
+}
+
+.btn-delete:hover {
+  background-color: #dc3545; /* Red on hover */
+  border-color: #dc3545;
+}
+
+/* Table styling */
+.table {
+  margin-bottom: 0;
+}
+
+.table th {
+  font-weight: 600;
+}
+
+.table-responsive {
+  overflow-x: auto;
+}
+
+/* Tooltip styling */
+.tooltip-inner {
+  max-width: 300px;
+  white-space: nowrap;
+}
+
+
+/* Custom styles for responsiveness */
+@media (max-width: 767.98px) {
+  .input-group {
+    margin-bottom: 0.5rem; /* Add spacing below search bar on small screens */
+  }
+
+  .form-select {
+    margin-bottom: 0.5rem; /* Add spacing below grouping dropdown on small screens */
+  }
+
+  .dropdown {
+    width: 100%; /* Make export dropdown full width on small screens */
+  }
+
+  .dropdown-toggle {
+    width: 100%; /* Make export button full width on small screens */
+  }
+}
+
